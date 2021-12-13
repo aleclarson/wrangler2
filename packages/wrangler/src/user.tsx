@@ -205,96 +205,92 @@
    limitations under the License.
   */
 
-import React from "react";
-import { render } from "ink";
-import Table from "ink-table";
-import SelectInput from "ink-select-input";
-import fetch from "node-fetch";
-import { webcrypto as crypto } from "node:crypto";
-import { TextEncoder } from "node:util";
-import open from "open";
-import url from "node:url";
-import http from "node:http";
-import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
-import path from "node:path";
-import process from "node:process";
-import os from "node:os";
-import TOML from "@iarna/toml";
-import assert from "node:assert";
-import type { ParsedUrlQuery } from "node:querystring";
-import { CF_API_BASE_URL } from "./cfetch";
-import type { Response } from "node-fetch";
+import fetch from 'node-fetch'
+import { webcrypto as crypto } from 'node:crypto'
+import { TextEncoder } from 'node:util'
+import open from 'open'
+import url from 'node:url'
+import http from 'node:http'
+import { readFile, writeFile, rm, mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import os from 'node:os'
+import TOML from '@iarna/toml'
+import assert from 'node:assert'
+import type { ParsedUrlQuery } from 'node:querystring'
+import { CF_API_BASE_URL } from './cfetch'
+import type { Response } from 'node-fetch'
 
 /**
  * An implementation of rfc6749#section-4.1 and rfc7636.
  */
 
 interface PKCECodes {
-  codeChallenge: string;
-  codeVerifier: string;
+  codeChallenge: string
+  codeVerifier: string
 }
 
 interface State {
-  accessToken?: AccessToken; // persist
-  authorizationCode?: string;
-  codeChallenge?: string;
-  codeVerifier?: string;
-  hasAuthCodeBeenExchangedForAccessToken?: boolean;
-  refreshToken?: RefreshToken; // persist
-  stateQueryParam?: string;
-  scopes?: Scope[];
+  accessToken?: AccessToken // persist
+  authorizationCode?: string
+  codeChallenge?: string
+  codeVerifier?: string
+  hasAuthCodeBeenExchangedForAccessToken?: boolean
+  refreshToken?: RefreshToken // persist
+  stateQueryParam?: string
+  scopes?: Scope[]
 }
 
 interface RefreshToken {
-  value: string;
+  value: string
 }
 
 interface AccessToken {
-  value: string;
-  expiry: string;
+  value: string
+  expiry: string
 }
 
 type Scope =
-  | "account:read"
-  | "user:read"
-  | "workers:write"
-  | "workers_kv:write"
-  | "workers_routes:write"
-  | "workers_scripts:write"
-  | "workers_tail:read"
-  | "zone:read"
-  | "offline_access"; // this should be included by default
+  | 'account:read'
+  | 'user:read'
+  | 'workers:write'
+  | 'workers_kv:write'
+  | 'workers_routes:write'
+  | 'workers_scripts:write'
+  | 'workers_tail:read'
+  | 'zone:read'
+  | 'offline_access' // this should be included by default
 
 const Scopes: Scope[] = [
-  "account:read",
-  "user:read",
-  "workers:write",
-  "workers_kv:write",
-  "workers_routes:write",
-  "workers_scripts:write",
-  "workers_tail:read",
-  "zone:read",
-];
+  'account:read',
+  'user:read',
+  'workers:write',
+  'workers_kv:write',
+  'workers_routes:write',
+  'workers_scripts:write',
+  'workers_tail:read',
+  'zone:read',
+]
 
 const ScopeDescriptions = [
-  "See your account info such as account details, analytics, and memberships.",
-  "See your user info such as name, email address, and account memberships.",
-  "See and change Cloudflare Workers data such as zones, KV storage, namespaces, scripts, and routes.",
-  "See and change Cloudflare Workers KV Storage data such as keys and namespaces.",
-  "See and change Cloudflare Workers data such as filters and routes.",
-  "See and change Cloudflare Workers scripts, durable objects, subdomains, triggers, and tail data.",
-  "See Cloudflare Workers tail and script data.",
-  "Grants read level access to account zone.",
-];
+  'See your account info such as account details, analytics, and memberships.',
+  'See your user info such as name, email address, and account memberships.',
+  'See and change Cloudflare Workers data such as zones, KV storage, namespaces, scripts, and routes.',
+  'See and change Cloudflare Workers KV Storage data such as keys and namespaces.',
+  'See and change Cloudflare Workers data such as filters and routes.',
+  'See and change Cloudflare Workers scripts, durable objects, subdomains, triggers, and tail data.',
+  'See Cloudflare Workers tail and script data.',
+  'Grants read level access to account zone.',
+]
 
-const CLIENT_ID = "54d11594-84e4-41aa-b438-e81b8fa78ee7";
-const AUTH_URL = "https://dash.cloudflare.com/oauth2/auth";
-const TOKEN_URL = "https://dash.cloudflare.com/oauth2/token";
-const CALLBACK_URL = "http://localhost:8976/oauth/callback";
-const REVOKE_URL = "https://dash.cloudflare.com/oauth2/revoke";
+const CLIENT_ID = '54d11594-84e4-41aa-b438-e81b8fa78ee7'
+const AUTH_URL = 'https://dash.cloudflare.com/oauth2/auth'
+const TOKEN_URL = 'https://dash.cloudflare.com/oauth2/token'
+const CALLBACK_URL = 'http://localhost:8976/oauth/callback'
+const REVOKE_URL = 'https://dash.cloudflare.com/oauth2/revoke'
 
-const LocalState: State = {};
-let initialised = false;
+const LocalState: State = {}
+let initialised = false
 
 // we do this because we have some async stuff
 // TODO: this should just happen in the top level
@@ -306,57 +302,55 @@ export async function initialise(): Promise<void> {
     if (process.env.CF_API_TOKEN) {
       LocalState.accessToken = {
         value: process.env.CF_API_TOKEN,
-        expiry: "3021-12-31T23:59:59+00:00",
-      };
-      initialised = true;
-      return;
+        expiry: '3021-12-31T23:59:59+00:00',
+      }
+      initialised = true
+      return
     }
 
     const toml = TOML.parse(
-      await readFile(path.join(os.homedir(), ".wrangler/config/default.toml"), {
-        encoding: "utf-8",
+      await readFile(path.join(os.homedir(), '.wrangler/config/default.toml'), {
+        encoding: 'utf-8',
       })
-    );
+    )
     const { oauth_token, refresh_token, expiration_time } = toml as {
-      oauth_token: string;
-      refresh_token: string;
-      expiration_time: string;
-    };
+      oauth_token: string
+      refresh_token: string
+      expiration_time: string
+    }
     if (oauth_token) {
-      LocalState.accessToken = { value: oauth_token, expiry: expiration_time };
+      LocalState.accessToken = { value: oauth_token, expiry: expiration_time }
     }
     if (refresh_token) {
-      LocalState.refreshToken = { value: refresh_token };
+      LocalState.refreshToken = { value: refresh_token }
     }
   } catch (err) {
     // no config yet, let's chill
     // console.error(err);
   }
-  initialised = true;
+  initialised = true
 }
 
 // ugh. TODO: see fix from above.
 function throwIfNotInitialised() {
   if (initialised === false) {
-    throw new Error(
-      "did you forget to call initialise() from the user module?"
-    );
+    throw new Error('did you forget to call initialise() from the user module?')
   }
 }
 
 export function getAPIToken(): string {
   if (process.env.CF_API_TOKEN) {
-    return process.env.CF_API_TOKEN;
+    return process.env.CF_API_TOKEN
   }
 
-  throwIfNotInitialised();
-  return LocalState.accessToken?.value;
+  throwIfNotInitialised()
+  return LocalState.accessToken?.value
 }
 
 interface AccessContext {
-  token?: AccessToken;
-  scopes?: Scope[];
-  refreshToken?: RefreshToken;
+  token?: AccessToken
+  scopes?: Scope[]
+  refreshToken?: RefreshToken
 }
 
 /**
@@ -365,48 +359,48 @@ interface AccessContext {
 // To "namespace" all errors.
 class ErrorOAuth2 extends Error {
   toString(): string {
-    return "ErrorOAuth2";
+    return 'ErrorOAuth2'
   }
 }
 
 // For really unknown errors.
 class ErrorUnknown extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorUnknown";
+    return 'ErrorUnknown'
   }
 }
 
 // Some generic, internal errors that can happen.
 class ErrorNoAuthCode extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorNoAuthCode";
+    return 'ErrorNoAuthCode'
   }
 }
 class ErrorInvalidReturnedStateParam extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorInvalidReturnedStateParam";
+    return 'ErrorInvalidReturnedStateParam'
   }
 }
 class ErrorInvalidJson extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorInvalidJson";
+    return 'ErrorInvalidJson'
   }
 }
 
 // Errors that occur across many endpoints
 class ErrorInvalidScope extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorInvalidScope";
+    return 'ErrorInvalidScope'
   }
 }
 class ErrorInvalidRequest extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorInvalidRequest";
+    return 'ErrorInvalidRequest'
   }
 }
 class ErrorInvalidToken extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorInvalidToken";
+    return 'ErrorInvalidToken'
   }
 }
 
@@ -416,32 +410,32 @@ class ErrorInvalidToken extends ErrorOAuth2 {
  */
 class ErrorAuthenticationGrant extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorAuthenticationGrant";
+    return 'ErrorAuthenticationGrant'
   }
 }
 class ErrorUnauthorizedClient extends ErrorAuthenticationGrant {
   toString(): string {
-    return "ErrorUnauthorizedClient";
+    return 'ErrorUnauthorizedClient'
   }
 }
 class ErrorAccessDenied extends ErrorAuthenticationGrant {
   toString(): string {
-    return "ErrorAccessDenied";
+    return 'ErrorAccessDenied'
   }
 }
 class ErrorUnsupportedResponseType extends ErrorAuthenticationGrant {
   toString(): string {
-    return "ErrorUnsupportedResponseType";
+    return 'ErrorUnsupportedResponseType'
   }
 }
 class ErrorServerError extends ErrorAuthenticationGrant {
   toString(): string {
-    return "ErrorServerError";
+    return 'ErrorServerError'
   }
 }
 class ErrorTemporarilyUnavailable extends ErrorAuthenticationGrant {
   toString(): string {
-    return "ErrorTemporarilyUnavailable";
+    return 'ErrorTemporarilyUnavailable'
   }
 }
 
@@ -450,22 +444,22 @@ class ErrorTemporarilyUnavailable extends ErrorAuthenticationGrant {
  */
 class ErrorAccessTokenResponse extends ErrorOAuth2 {
   toString(): string {
-    return "ErrorAccessTokenResponse";
+    return 'ErrorAccessTokenResponse'
   }
 }
 class ErrorInvalidClient extends ErrorAccessTokenResponse {
   toString(): string {
-    return "ErrorInvalidClient";
+    return 'ErrorInvalidClient'
   }
 }
 class ErrorInvalidGrant extends ErrorAccessTokenResponse {
   toString(): string {
-    return "ErrorInvalidGrant";
+    return 'ErrorInvalidGrant'
   }
 }
 class ErrorUnsupportedGrantType extends ErrorAccessTokenResponse {
   toString(): string {
-    return "ErrorUnsupportedGrantType";
+    return 'ErrorUnsupportedGrantType'
   }
 }
 
@@ -482,13 +476,13 @@ const RawErrorToErrorClassMap: { [_: string]: typeof ErrorOAuth2 } = {
   unsupported_grant_type: ErrorUnsupportedGrantType,
   invalid_json: ErrorInvalidJson,
   invalid_token: ErrorInvalidToken,
-};
+}
 
 /**
  * Translate the raw error strings returned from the server into error classes.
  */
 function toErrorClass(rawError: string): ErrorOAuth2 {
-  return new (RawErrorToErrorClassMap[rawError] || ErrorUnknown)();
+  return new (RawErrorToErrorClassMap[rawError] || ErrorUnknown)()
 }
 
 /**
@@ -498,18 +492,18 @@ function toErrorClass(rawError: string): ErrorOAuth2 {
  * encoded will be 43 bytes, or 96 bytes encoded will be 128 bytes. So 96 bytes
  * is the highest valid value that can be used.
  */
-const RECOMMENDED_CODE_VERIFIER_LENGTH = 96;
+const RECOMMENDED_CODE_VERIFIER_LENGTH = 96
 
 /**
  * A sensible length for the state's length, for anti-csrf.
  */
-const RECOMMENDED_STATE_LENGTH = 32;
+const RECOMMENDED_STATE_LENGTH = 32
 
 /**
  * Character set to generate code verifier defined in rfc7636.
  */
 const PKCE_CHARSET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'
 
 /**
  * OAuth 2.0 client that ONLY supports authorization code flow, with PKCE.
@@ -523,40 +517,40 @@ const PKCE_CHARSET =
 function isReturningFromAuthServer(query: ParsedUrlQuery): boolean {
   if (query.error) {
     if (Array.isArray(query.error)) {
-      throw toErrorClass(query.error[0]);
+      throw toErrorClass(query.error[0])
     }
-    throw toErrorClass(query.error);
+    throw toErrorClass(query.error)
   }
 
-  const code = query.code;
+  const code = query.code
   if (!code) {
-    return false;
+    return false
   }
 
-  const state = LocalState;
+  const state = LocalState
 
-  const stateQueryParam = query.state;
+  const stateQueryParam = query.state
   if (stateQueryParam !== state.stateQueryParam) {
     console.warn(
       "state query string parameter doesn't match the one sent! Possible malicious activity somewhere."
-    );
-    throw new ErrorInvalidReturnedStateParam();
+    )
+    throw new ErrorInvalidReturnedStateParam()
   }
-  assert(!Array.isArray(code));
-  state.authorizationCode = code;
-  state.hasAuthCodeBeenExchangedForAccessToken = false;
-  return true;
+  assert(!Array.isArray(code))
+  state.authorizationCode = code
+  state.hasAuthCodeBeenExchangedForAccessToken = false
+  return true
 }
 
 export async function getAuthURL(scopes?: string[]): Promise<string> {
-  const { codeChallenge, codeVerifier } = await generatePKCECodes();
-  const stateQueryParam = generateRandomState(RECOMMENDED_STATE_LENGTH);
+  const { codeChallenge, codeVerifier } = await generatePKCECodes()
+  const stateQueryParam = generateRandomState(RECOMMENDED_STATE_LENGTH)
 
   Object.assign(LocalState, {
     codeChallenge,
     codeVerifier,
     stateQueryParam,
-  });
+  })
 
   // TODO: verify that the scopes passed are legit
 
@@ -566,90 +560,90 @@ export async function getAuthURL(scopes?: string[]): Promise<string> {
     `client_id=${encodeURIComponent(CLIENT_ID)}&` +
     `redirect_uri=${encodeURIComponent(CALLBACK_URL)}&` +
     `scope=${encodeURIComponent(
-      (scopes || Scopes).concat("offline_access").join(" ")
+      (scopes || Scopes).concat('offline_access').join(' ')
     )}&` +
     `state=${stateQueryParam}&` +
     `code_challenge=${encodeURIComponent(codeChallenge)}&` +
     `code_challenge_method=S256`
-  );
+  )
 }
 
 /**
  * Refresh an access token from the remote service.
  */
 async function exchangeRefreshTokenForAccessToken(): Promise<AccessContext> {
-  const { refreshToken } = LocalState;
+  const { refreshToken } = LocalState
 
   if (!refreshToken) {
-    console.warn("No refresh token is present.");
+    console.warn('No refresh token is present.')
   }
 
-  const url = TOKEN_URL;
+  const url = TOKEN_URL
   const body =
     `grant_type=refresh_token&` +
     `refresh_token=${refreshToken?.value}&` +
-    `client_id=${CLIENT_ID}`;
+    `client_id=${CLIENT_ID}`
 
   const response = await fetch(url, {
-    method: "POST",
+    method: 'POST',
     body,
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-  });
+  })
   if (response.status >= 400) {
-    throw await response.json();
+    throw await response.json()
   } else {
     try {
-      const json = await response.json();
+      const json = await response.json()
       const { access_token, expires_in, refresh_token, scope } = json as {
-        access_token: string;
-        expires_in: number;
-        refresh_token: string;
-        scope: string;
-      };
-      let scopes: Scope[] = [];
+        access_token: string
+        expires_in: number
+        refresh_token: string
+        scope: string
+      }
+      let scopes: Scope[] = []
 
       const accessToken: AccessToken = {
         value: access_token,
         expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
-      };
-      LocalState.accessToken = accessToken;
+      }
+      LocalState.accessToken = accessToken
 
       if (refresh_token) {
         const refreshToken: RefreshToken = {
           value: refresh_token,
-        };
-        LocalState.refreshToken = refreshToken;
+        }
+        LocalState.refreshToken = refreshToken
       }
 
       if (scope) {
         // Multiple scopes are passed and delimited by spaces,
         // despite using the singular name "scope".
-        scopes = scope.split(" ") as Scope[];
-        LocalState.scopes = scopes;
+        scopes = scope.split(' ') as Scope[]
+        LocalState.scopes = scopes
       }
 
       const accessContext: AccessContext = {
         token: accessToken,
         scopes,
         refreshToken: LocalState.refreshToken,
-      };
-      return accessContext;
+      }
+      return accessContext
     } catch (err) {
-      const error = err?.error || "There was a network error.";
+      const error = err?.error || 'There was a network error.'
       switch (error) {
-        case "invalid_grant":
+        case 'invalid_grant':
           console.log(
-            "Expired! Auth code or refresh token needs to be renewed."
-          );
+            'Expired! Auth code or refresh token needs to be renewed.'
+          )
           // alert("Redirecting to auth server to obtain a new auth grant code.");
           // TODO: return refreshAuthCodeOrRefreshToken();
-          break;
+          break
         default:
-          break;
+          break
       }
-      throw toErrorClass(error);
+      throw toErrorClass(error)
     }
   }
 }
@@ -658,76 +652,76 @@ async function exchangeRefreshTokenForAccessToken(): Promise<AccessContext> {
  * Fetch an access token from the remote service.
  */
 async function exchangeAuthCodeForAccessToken(): Promise<AccessContext> {
-  const { authorizationCode, codeVerifier = "" } = LocalState;
+  const { authorizationCode, codeVerifier = '' } = LocalState
 
   if (!codeVerifier) {
-    console.warn("No code verifier is being sent.");
+    console.warn('No code verifier is being sent.')
   } else if (!authorizationCode) {
-    console.warn("No authorization grant code is being passed.");
+    console.warn('No authorization grant code is being passed.')
   }
 
-  const url = TOKEN_URL;
+  const url = TOKEN_URL
   const body =
     `grant_type=authorization_code&` +
-    `code=${encodeURIComponent(authorizationCode || "")}&` +
+    `code=${encodeURIComponent(authorizationCode || '')}&` +
     `redirect_uri=${encodeURIComponent(CALLBACK_URL)}&` +
     `client_id=${encodeURIComponent(CLIENT_ID)}&` +
-    `code_verifier=${codeVerifier}`;
+    `code_verifier=${codeVerifier}`
 
   const response = await fetch(url, {
-    method: "POST",
+    method: 'POST',
     body,
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-  });
+  })
   if (!response.ok) {
-    const { error } = (await response.json()) as { error: string };
+    const { error } = (await response.json()) as { error: string }
     // .catch((_) => ({ error: "invalid_json" }));
-    if (error === "invalid_grant") {
-      console.log("Expired! Auth code or refresh token needs to be renewed.");
+    if (error === 'invalid_grant') {
+      console.log('Expired! Auth code or refresh token needs to be renewed.')
       // alert("Redirecting to auth server to obtain a new auth grant code.");
       // TODO: return refreshAuthCodeOrRefreshToken();
     }
-    throw toErrorClass(error);
+    throw toErrorClass(error)
   }
-  const json = await response.json();
+  const json = await response.json()
   const { access_token, expires_in, refresh_token, scope } = json as {
-    access_token: string;
-    expires_in: number;
-    refresh_token: string;
-    scope: string;
-  };
-  let scopes: Scope[] = [];
-  LocalState.hasAuthCodeBeenExchangedForAccessToken = true;
+    access_token: string
+    expires_in: number
+    refresh_token: string
+    scope: string
+  }
+  let scopes: Scope[] = []
+  LocalState.hasAuthCodeBeenExchangedForAccessToken = true
 
-  const expiryDate = new Date(Date.now() + expires_in * 1000);
+  const expiryDate = new Date(Date.now() + expires_in * 1000)
   const accessToken: AccessToken = {
     value: access_token,
     expiry: expiryDate.toISOString(),
-  };
-  LocalState.accessToken = accessToken;
+  }
+  LocalState.accessToken = accessToken
 
   if (refresh_token) {
     const refreshToken: RefreshToken = {
       value: refresh_token,
-    };
-    LocalState.refreshToken = refreshToken;
+    }
+    LocalState.refreshToken = refreshToken
   }
 
   if (scope) {
     // Multiple scopes are passed and delimited by spaces,
     // despite using the singular name "scope".
-    scopes = scope.split(" ") as Scope[];
-    LocalState.scopes = scopes;
+    scopes = scope.split(' ') as Scope[]
+    LocalState.scopes = scopes
   }
 
   const accessContext: AccessContext = {
     token: accessToken,
     scopes,
     refreshToken: LocalState.refreshToken,
-  };
-  return accessContext;
+  }
+  return accessContext
 }
 
 /**
@@ -735,11 +729,11 @@ async function exchangeAuthCodeForAccessToken(): Promise<AccessContext> {
  * the same as regular base64 encoding.
  */
 function base64urlEncode(value: string): string {
-  let base64 = btoa(value);
-  base64 = base64.replace(/\+/g, "-");
-  base64 = base64.replace(/\//g, "_");
-  base64 = base64.replace(/=/g, "");
-  return base64;
+  let base64 = btoa(value)
+  base64 = base64.replace(/\+/g, '-')
+  base64 = base64.replace(/\//g, '_')
+  base64 = base64.replace(/=/g, '')
+  return base64
 }
 
 /**
@@ -747,283 +741,252 @@ function base64urlEncode(value: string): string {
  */
 
 async function generatePKCECodes(): Promise<PKCECodes> {
-  const output = new Uint32Array(RECOMMENDED_CODE_VERIFIER_LENGTH);
+  const output = new Uint32Array(RECOMMENDED_CODE_VERIFIER_LENGTH)
   // @ts-expect-error crypto's types aren't there yet
-  crypto.getRandomValues(output);
+  crypto.getRandomValues(output)
   const codeVerifier = base64urlEncode(
     Array.from(output)
       .map((num: number) => PKCE_CHARSET[num % PKCE_CHARSET.length])
-      .join("")
-  );
+      .join('')
+  )
   // @ts-expect-error crypto's types aren't there yet
   const buffer = await crypto.subtle.digest(
-    "SHA-256",
+    'SHA-256',
     new TextEncoder().encode(codeVerifier)
-  );
-  const hash = new Uint8Array(buffer);
-  let binary = "";
-  const hashLength = hash.byteLength;
+  )
+  const hash = new Uint8Array(buffer)
+  let binary = ''
+  const hashLength = hash.byteLength
   for (let i = 0; i < hashLength; i++) {
-    binary += String.fromCharCode(hash[i]);
+    binary += String.fromCharCode(hash[i])
   }
-  const codeChallenge = base64urlEncode(binary);
-  return { codeChallenge, codeVerifier };
+  const codeChallenge = base64urlEncode(binary)
+  return { codeChallenge, codeVerifier }
 }
 
 /**
  * Generates random state to be passed for anti-csrf.
  */
 function generateRandomState(lengthOfState: number): string {
-  const output = new Uint32Array(lengthOfState);
+  const output = new Uint32Array(lengthOfState)
   // @ts-expect-error crypto's types aren't there yet
-  crypto.getRandomValues(output);
+  crypto.getRandomValues(output)
   return Array.from(output)
     .map((num: number) => PKCE_CHARSET[num % PKCE_CHARSET.length])
-    .join("");
+    .join('')
 }
 
 async function writeToConfigFile(tokenData: AccessContext) {
-  await mkdir(path.join(os.homedir(), ".wrangler/config/"), {
+  await mkdir(path.join(os.homedir(), '.wrangler/config/'), {
     recursive: true,
-  });
+  })
   await writeFile(
-    path.join(os.homedir(), ".wrangler/config/default.toml"),
+    path.join(os.homedir(), '.wrangler/config/default.toml'),
     `
-oauth_token = "${tokenData.token?.value || ""}"
+oauth_token = "${tokenData.token?.value || ''}"
 refresh_token = "${tokenData.refreshToken?.value}"
 expiration_time = "${tokenData.token?.expiry}"
 `,
-    { encoding: "utf-8" }
-  );
+    { encoding: 'utf-8' }
+  )
 }
 
 type LoginProps = {
-  scopes?: string[];
-};
+  scopes?: string[]
+}
 
 export async function loginOrRefreshIfRequired(): Promise<boolean> {
   // TODO: if there already is a token, then try refreshing
   // TODO: ask permission before opening browser
   if (!LocalState.accessToken) {
     // not logged in.
-    return await login();
+    return await login()
   } else if (isAccessTokenExpired()) {
-    return await refreshToken();
+    return await refreshToken()
   } else {
-    return true;
+    return true
   }
 }
 
 export async function login(props?: LoginProps): Promise<boolean> {
-  const urlToOpen = await getAuthURL(props?.scopes);
-  open(urlToOpen);
+  const urlToOpen = await getAuthURL(props?.scopes)
+  open(urlToOpen)
   // TODO: log url only if on system where it's unreliable/unavailable
   // console.log(`💁 Opened ${urlToOpen}`);
-  let server;
-  let loginTimeoutHandle;
-  const timerPromise = new Promise<boolean>((resolve) => {
+  let server
+  let loginTimeoutHandle
+  const timerPromise = new Promise<boolean>(resolve => {
     loginTimeoutHandle = setTimeout(() => {
-      console.error("Timed out waiting for authorization code.");
-      server.close();
-      clearTimeout(loginTimeoutHandle);
-      resolve(false);
-    }, 60000); // wait for 30 seconds for the user to authorize
-  });
+      console.error('Timed out waiting for authorization code.')
+      server.close()
+      clearTimeout(loginTimeoutHandle)
+      resolve(false)
+    }, 60000) // wait for 30 seconds for the user to authorize
+  })
 
   const loginPromise = new Promise<boolean>((resolve, reject) => {
     server = http.createServer(async (req, res) => {
       function finish(status: boolean, error?: Error) {
-        clearTimeout(loginTimeoutHandle);
+        clearTimeout(loginTimeoutHandle)
         server.close((closeErr?: Error) => {
           if (error || closeErr) {
-            reject(error || closeErr);
-          } else resolve(status);
-        });
+            reject(error || closeErr)
+          } else resolve(status)
+        })
       }
 
-      assert(req.url, "This request doesn't have a URL"); // This should never happen
-      const { pathname, query } = url.parse(req.url, true);
+      assert(req.url, "This request doesn't have a URL") // This should never happen
+      const { pathname, query } = url.parse(req.url, true)
       switch (pathname) {
-        case "/oauth/callback": {
-          let hasAuthCode = false;
+        case '/oauth/callback': {
+          let hasAuthCode = false
           try {
-            hasAuthCode = isReturningFromAuthServer(query);
+            hasAuthCode = isReturningFromAuthServer(query)
           } catch (err: unknown) {
             if (err instanceof ErrorAccessDenied) {
               res.writeHead(307, {
                 Location:
-                  "https://welcome.developers.workers.dev/wrangler-oauth-consent-denied",
-              });
+                  'https://welcome.developers.workers.dev/wrangler-oauth-consent-denied',
+              })
               res.end(() => {
-                finish(false);
-              });
+                finish(false)
+              })
               console.log(
                 "Error: Consent denied. You must grant consent to Wrangler in order to login. If you don't want to do this consider passing an API token with CF_API_TOKEN variable"
-              ); // TODO: implement wrangler config lol
+              ) // TODO: implement wrangler config lol
 
-              return;
+              return
             } else {
-              finish(false, err as Error);
-              return;
+              finish(false, err as Error)
+              return
             }
           }
           if (!hasAuthCode) {
             // render an error page here
-            finish(false, new ErrorNoAuthCode());
-            return;
+            finish(false, new ErrorNoAuthCode())
+            return
           } else {
-            const tokenData = await exchangeAuthCodeForAccessToken();
-            await writeToConfigFile(tokenData);
+            const tokenData = await exchangeAuthCodeForAccessToken()
+            await writeToConfigFile(tokenData)
             res.writeHead(307, {
               Location:
-                "https://welcome.developers.workers.dev/wrangler-oauth-consent-granted",
-            });
+                'https://welcome.developers.workers.dev/wrangler-oauth-consent-granted',
+            })
             res.end(() => {
-              finish(true);
-            });
+              finish(true)
+            })
             console.log(
               `Successfully configured. You can find your configuration file at: ${os.homedir()}/.wrangler/config/default.toml`
-            );
+            )
 
-            return;
+            return
           }
         }
       }
-    });
+    })
 
-    server.listen(8976);
-  });
+    server.listen(8976)
+  })
 
-  return Promise.race([timerPromise, loginPromise]);
+  return Promise.race([timerPromise, loginPromise])
 }
 
 /**
  * Checks to see if the access token has expired.
  */
 export function isAccessTokenExpired(): boolean {
-  throwIfNotInitialised();
-  const { accessToken } = LocalState;
-  return Boolean(accessToken && new Date() >= new Date(accessToken.expiry));
+  throwIfNotInitialised()
+  const { accessToken } = LocalState
+  return Boolean(accessToken && new Date() >= new Date(accessToken.expiry))
 }
 
 export async function refreshToken(): Promise<boolean> {
-  throwIfNotInitialised();
+  throwIfNotInitialised()
   // refresh
   try {
-    const refreshed = await exchangeRefreshTokenForAccessToken();
-    await writeToConfigFile(refreshed);
-    return true;
+    const refreshed = await exchangeRefreshTokenForAccessToken()
+    await writeToConfigFile(refreshed)
+    return true
   } catch (err) {
-    console.error(err);
-    return false;
+    console.error(err)
+    return false
   }
 }
 
 export async function logout(): Promise<void> {
-  throwIfNotInitialised();
-  const { refreshToken } = LocalState;
+  throwIfNotInitialised()
+  const { refreshToken } = LocalState
   if (!refreshToken) {
-    console.log("Not logged in, exiting...");
-    return;
+    console.log('Not logged in, exiting...')
+    return
   }
   const body =
     `client_id=${encodeURIComponent(CLIENT_ID)}&` +
     `token_type_hint=refresh_token&` +
-    `token=${encodeURIComponent(refreshToken?.value || "")}`;
+    `token=${encodeURIComponent(refreshToken?.value || '')}`
 
   const response = await fetch(REVOKE_URL, {
-    method: "POST",
+    method: 'POST',
     body,
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-  });
-  await response.text(); // blank text? would be nice if it was something meaningful
+  })
+  await response.text() // blank text? would be nice if it was something meaningful
   console.log(
-    "💁  Wrangler is configured with an OAuth token. The token has been successfully revoked"
-  );
+    '💁  Wrangler is configured with an OAuth token. The token has been successfully revoked'
+  )
   // delete the file
-  await rm(path.join(os.homedir(), ".wrangler/config/default.toml"));
+  await rm(path.join(os.homedir(), '.wrangler/config/default.toml'))
   console.log(
     `Removing ${os.homedir()}/.wrangler/config/default.toml.. success!`
-  );
-}
-
-export function listScopes(): void {
-  throwIfNotInitialised();
-  console.log("💁 Available scopes:");
-  const data = Scopes.map((scope, index) => ({
-    Scope: scope,
-    Description: ScopeDescriptions[index],
-  }));
-  render(<Table data={data} />);
-  // TODO: maybe a good idea to show usage here
+  )
 }
 
 export async function getAccountId() {
-  const apiToken = getAPIToken();
-  if (!apiToken) return;
+  const apiToken = getAPIToken()
+  if (!apiToken) return
 
   if (process.env.CF_ACCOUNT_ID) {
-    return process.env.CF_ACCOUNT_ID;
+    return process.env.CF_ACCOUNT_ID
   }
 
-  let response: Response;
+  let response: Response
   try {
     response = await fetch(`${CF_API_BASE_URL}/memberships`, {
-      method: "GET",
+      method: 'GET',
       headers: {
-        Authorization: "Bearer " + apiToken,
+        Authorization: 'Bearer ' + apiToken,
       },
-    });
+    })
   } catch (err) {
     // probably offline
   }
-  if (!response) return;
-  let accountId: string;
+  if (!response) return
+  let accountId: string
   // @ts-expect-error need to type this response
   const responseJSON: {
-    success: boolean;
-    result: { id: string; account: { id: string; name: string } }[];
-  } = await response.json();
+    success: boolean
+    result: { id: string; account: { id: string; name: string } }[]
+  } = await response.json()
 
   if (responseJSON.success === true) {
     if (responseJSON.result.length === 1) {
-      accountId = responseJSON.result[0].account.id;
+      accountId = responseJSON.result[0].account.id
     } else {
-      accountId = await new Promise((resolve) => {
-        const accounts = responseJSON.result.map((x) => x.account);
-        const { unmount } = render(
-          <ChooseAccount
-            accounts={accounts}
-            onSelect={async (selected) => {
-              resolve(selected.value.id);
-              unmount();
-            }}
-          />
-        );
-      });
+      const prompt = require('prompts') as typeof import('prompts')
+      accountId = await prompt({
+        name: 'id',
+        type: 'select',
+        choices: responseJSON.result.map(({ account }) => ({
+          title: account.name,
+          value: account.id,
+        })),
+      }).then(
+        answers => answers.id,
+        () => process.exit()
+      )
     }
   }
-  return accountId;
-}
-
-type ChooseAccountItem = {
-  id: string;
-  name: string;
-};
-export function ChooseAccount(props: {
-  accounts: ChooseAccountItem[];
-  onSelect: (item) => void;
-}) {
-  return (
-    <SelectInput
-      items={props.accounts.map((item) => ({
-        key: item.id,
-        label: item.name,
-        value: item,
-      }))}
-      onSelect={props.onSelect}
-    />
-  );
+  return accountId
 }

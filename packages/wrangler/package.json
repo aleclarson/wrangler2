@@ -39,6 +39,7 @@
     "@cloudflare/pages-functions-compiler": "0.3.5",
     "esbuild": "0.13.12",
     "miniflare": "2.0.0-rc.2",
+    "prompts": "^2.4.2",
     "semiver": "^1.1.0",
     "serve": "^13.0.2"
   },
@@ -49,6 +50,7 @@
     "@iarna/toml": "^2.2.5",
     "@types/cloudflare": "^2.7.6",
     "@types/express": "^4.17.13",
+    "@types/prompts": "^2.0.14",
     "@types/react": "^17.0.34",
     "@types/signal-exit": "^3.0.1",
     "@types/ws": "^8.2.0",
