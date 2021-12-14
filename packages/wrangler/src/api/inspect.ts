@@ -1,5 +1,5 @@
 import { Response, Request, Headers } from "node-fetch";
-import type { MessageEvent } from "ws";
+import type { ErrorEvent, MessageEvent } from "ws";
 import WebSocket, { WebSocketServer } from "ws";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createServer } from "http";
@@ -164,7 +164,7 @@ export class DtInspector {
   #webSocket: WebSocket;
   #keepAlive?: NodeJS.Timer;
 
-  constructor(url: string) {
+  constructor(url: string, onError: (e: ErrorEvent) => void) {
     // this.#events = [];
     // this.#listeners = [];
     this.#webSocket = new WebSocket(url);
@@ -174,6 +174,7 @@ export class DtInspector {
     this.#webSocket.onclose = () => {
       this.disable();
     };
+    this.#webSocket.onerror = onError;
     this.#webSocket.on("unexpected-response", () => {
       console.log("504??"); // TODO: refactor this class to start again
     });
