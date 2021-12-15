@@ -220,6 +220,7 @@ import assert from "assert";
 import type { ParsedUrlQuery } from "querystring";
 import { CF_API_BASE_URL } from "./cfetch";
 import type { Response } from "node-fetch";
+import { Scope, Scopes } from "./scopes";
 
 /**
  * An implementation of rfc6749#section-4.1 and rfc7636.
@@ -249,39 +250,6 @@ interface AccessToken {
   value: string;
   expiry: string;
 }
-
-type Scope =
-  | "account:read"
-  | "user:read"
-  | "workers:write"
-  | "workers_kv:write"
-  | "workers_routes:write"
-  | "workers_scripts:write"
-  | "workers_tail:read"
-  | "zone:read"
-  | "offline_access"; // this should be included by default
-
-const Scopes: Scope[] = [
-  "account:read",
-  "user:read",
-  "workers:write",
-  "workers_kv:write",
-  "workers_routes:write",
-  "workers_scripts:write",
-  "workers_tail:read",
-  "zone:read",
-];
-
-const ScopeDescriptions = [
-  "See your account info such as account details, analytics, and memberships.",
-  "See your user info such as name, email address, and account memberships.",
-  "See and change Cloudflare Workers data such as zones, KV storage, namespaces, scripts, and routes.",
-  "See and change Cloudflare Workers KV Storage data such as keys and namespaces.",
-  "See and change Cloudflare Workers data such as filters and routes.",
-  "See and change Cloudflare Workers scripts, durable objects, subdomains, triggers, and tail data.",
-  "See Cloudflare Workers tail and script data.",
-  "Grants read level access to account zone.",
-];
 
 const CLIENT_ID = "54d11594-84e4-41aa-b438-e81b8fa78ee7";
 const AUTH_URL = "https://dash.cloudflare.com/oauth2/auth";
@@ -332,7 +300,7 @@ export async function initialise(): Promise<void> {
 }
 
 // ugh. TODO: see fix from above.
-function throwIfNotInitialised() {
+export function throwIfNotInitialised() {
   if (initialised === false) {
     throw new Error(
       "did you forget to call initialise() from the user module?"

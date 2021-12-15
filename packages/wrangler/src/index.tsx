@@ -9,10 +9,10 @@ import { findUp } from "find-up";
 import TOML from "@iarna/toml";
 import type { Config } from "./config";
 import { confirm, prompt } from "./dialogs";
+import { listScopes } from "./scopes";
 import {
   login,
   logout,
-  listScopes,
   initialise as initialiseUserConfig,
   loginOrRefreshIfRequired,
   getAccountId,
