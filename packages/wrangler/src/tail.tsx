@@ -1,6 +1,5 @@
 import WebSocket from "ws";
 import cfetch from "./cfetch";
-import { version as packageVersion } from "../package.json";
 
 export type TailApiResponse = {
   id: string;
@@ -54,7 +53,7 @@ export async function createTail(
   const tail = new WebSocket(websocketUrl, "trace-v1", {
     headers: {
       "Sec-WebSocket-Protocol": "trace-v1", // needs to be `trace-v1` to be accepted
-      "User-Agent": `wrangler-js/${packageVersion}`,
+      "User-Agent": `wrangler-js/${require("../package.json").version}`,
     },
   });
 
