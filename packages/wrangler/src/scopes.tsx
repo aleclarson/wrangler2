@@ -1,4 +1,4 @@
-import React from "react";
+import * as React from "react";
 import { render } from "ink";
 import Table from "ink-table";
 import { throwIfNotInitialised } from "./user";

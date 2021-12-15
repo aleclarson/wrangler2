@@ -1,4 +1,4 @@
-import React from "react";
+import * as React from "react";
 import { render } from "ink";
 import { Dev } from "./dev";
 import { readFile } from "fs/promises";
