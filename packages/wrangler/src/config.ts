@@ -68,6 +68,7 @@ type Env = {
   jsxFragment?: string; // inherited
   // we should use typescript to parse cron patterns
   triggers?: { crons: Cron[] }; // inherited
+  vars?: Vars;
   kv_namespaces?: KVNamespace[];
 };
 

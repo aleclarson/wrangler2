@@ -38,13 +38,15 @@ export default async function publish(props: Props): Promise<void> {
     );
   }
   // TODO: warn if git/hg has uncommitted changes
-  const { config } = props;
   const {
-    account_id: accountId,
     build,
     // @ts-expect-error hidden
-    __path__,
-  } = config;
+    __path__: configPath,
+  } = props.config;
+
+  const envName = props.env ?? "production";
+  const config = props.config.env?.[envName] || props.config;
+  const accountId = config.account_id;
 
   const triggers = props.triggers || config.triggers?.crons;
   const routes = props.routes || config.routes;
@@ -61,14 +63,13 @@ export default async function publish(props: Props): Promise<void> {
   } else {
     assert(build?.upload?.main, "missing main file");
     assert(config.name, "missing name");
-    file = path.join(path.dirname(__path__), build.upload.main);
+    file = path.join(path.dirname(configPath), build.upload.main);
   }
 
   let scriptName = props.script ? props.name : config.name;
   if (props.legacyEnv) {
     scriptName += props.env ? `-${props.env}` : "";
   }
-  const envName = props.env ?? "production";
 
   const destination = await tmp.dir({ unsafeCleanup: true });
 
@@ -133,16 +134,14 @@ export default async function publish(props: Props): Promise<void> {
   const content = await readFile(chunks[0], { encoding: "utf-8" });
   destination.cleanup();
   const assets =
-    props.public || props.site || props.config.site?.bucket // TODO: allow both
+    props.public || props.site || config.site?.bucket // TODO: allow both
       ? await syncAssets(
           accountId,
           scriptName,
-          props.public || props.site || props.config.site?.bucket,
+          props.public || props.site || config.site?.bucket,
           false
         )
       : { manifest: undefined, namespace: undefined };
-
-  const envRootObj = props.env ? config[`env.${props.env}`] : config;
 
   const worker: CfWorkerInit = {
     main: {
@@ -154,8 +153,8 @@ export default async function publish(props: Props): Promise<void> {
           : "commonjs",
     },
     variables: {
-      ...(envRootObj?.vars || {}),
-      ...(envRootObj?.kv_namespaces || []).reduce(
+      ...(config.vars || {}),
+      ...(config.kv_namespaces || []).reduce(
         (obj, { binding, preview_id, id }) => {
           return { ...obj, [binding]: { namespaceId: id } };
         },
