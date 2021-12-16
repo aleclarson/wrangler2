@@ -2,6 +2,7 @@ import * as React from "react";
 import { render } from "ink";
 import { Dev } from "./dev";
 import { readFile } from "fs/promises";
+import kleur from "kleur";
 import makeCLI from "yargs";
 import { hideBin } from "yargs/helpers";
 import type yargs from "yargs";
@@ -577,43 +578,40 @@ export async function main(argv: string[]): Promise<void> {
     "tail [name]",
     "🦚 Starts a log tailing session for a deployed Worker.",
     (yargs) => {
-      return (
-        yargs
-          .positional("name", {
-            describe: "name of the worker",
-            type: "string",
-          })
-          // TODO: auto-detect if this should be json or pretty based on atty
-          .option("format", {
-            default: "json",
-            choices: ["json", "pretty"],
-            describe: "The format of log entries",
-          })
-          .option("status", {
-            choices: ["ok", "error", "canceled"],
-            describe: "Filter by invocation status",
-          })
-          .option("header", {
-            type: "string",
-            describe: "Filter by HTTP header",
-          })
-          .option("method", {
-            type: "string",
-            describe: "Filter by HTTP method",
-          })
-          .option("sampling-rate", {
-            type: "number",
-            describe: "Adds a percentage of requests to log sampling rate",
-          })
-          .option("search", {
-            type: "string",
-            describe: "Filter by a text match in console.log messages",
-          })
-          .option("env", {
-            type: "string",
-            describe: "Perform on a specific environment",
-          })
-      );
+      return yargs
+        .positional("name", {
+          describe: "name of the worker",
+          type: "string",
+        })
+        .option("format", {
+          default: process.stdout.isTTY ? "pretty" : "json",
+          choices: ["json", "pretty"],
+          describe: "The format of log entries",
+        })
+        .option("status", {
+          choices: ["ok", "error", "canceled"],
+          describe: "Filter by invocation status",
+        })
+        .option("header", {
+          type: "string",
+          describe: "Filter by HTTP header",
+        })
+        .option("method", {
+          type: "string",
+          describe: "Filter by HTTP method",
+        })
+        .option("sampling-rate", {
+          type: "number",
+          describe: "Adds a percentage of requests to log sampling rate",
+        })
+        .option("search", {
+          type: "string",
+          describe: "Filter by a text match in console.log messages",
+        })
+        .option("env", {
+          type: "string",
+          describe: "Perform on a specific environment",
+        });
       // TODO: filter by client ip, which can be 'self' or an ip address
     },
     async (args) => {
@@ -669,8 +667,43 @@ export async function main(argv: string[]): Promise<void> {
         deleteTail();
       });
 
+      const isPretty = args.format !== "json";
       tail.on("message", (data) => {
-        console.log(JSON.stringify(JSON.parse(data.toString()), null, "  "));
+        if (isPretty) {
+          const logs: [number, ...any[]][] = [];
+          const parsed = JSON.parse(data.toString());
+          for (const { timestamp, level, message } of parsed.logs || []) {
+            const prefix: string[] = [];
+            if (level == "error") {
+              prefix[0] = kleur.red(level);
+            } else if (level == "warn") {
+              prefix[0] = kleur.yellow(level);
+            }
+            if (prefix[0] && typeof message[0] === "string") {
+              prefix[0] += " " + message.shift();
+            }
+            logs.push([timestamp, ...prefix, ...message]);
+          }
+          for (const { timestamp, name, message } of parsed.exceptions || []) {
+            logs.push([
+              timestamp,
+              kleur.red("fatal") + " " + name + ": " + message,
+            ]);
+          }
+          for (const [timestamp, ...args] of logs.sort((a, b) => a[0] - b[0])) {
+            let msg = kleur.gray(
+              "[" + new Date(timestamp).toLocaleTimeString() + "]"
+            );
+            // In case the first argument contains a format specifier (eg: %O),
+            // we need to append it to the timestamp string.
+            if (typeof args[0] === "string") {
+              msg += " " + args.shift();
+            }
+            console.log(msg, ...args);
+          }
+        } else {
+          console.log(data);
+        }
       });
 
       while (tail.readyState !== tail.OPEN) {
