@@ -44,8 +44,7 @@ export default async function publish(props: Props): Promise<void> {
     __path__: configPath,
   } = props.config;
 
-  const envName = props.env ?? "production";
-  const config = props.config.env?.[envName] || props.config;
+  const config = (props.env && props.config.env?.[props.env]) || props.config;
   const accountId = config.account_id;
 
   const triggers = props.triggers || config.triggers?.crons;
@@ -184,6 +183,7 @@ export default async function publish(props: Props): Promise<void> {
   }
 
   const notProd = !props.legacyEnv && props.env;
+  const envName = props.env ?? "production";
   const workerName = notProd ? `${scriptName} (${envName})` : scriptName;
   const workerUrl = notProd
     ? `/accounts/${accountId}/workers/services/${scriptName}/environments/${envName}`
