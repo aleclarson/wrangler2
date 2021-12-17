@@ -20,7 +20,7 @@ type Props = {
   public?: string;
   site?: string;
   triggers?: (string | number)[];
-  routes?: (string | number)[];
+  routes?: string[];
   legacyEnv?: boolean;
   jsxFactory: void | string;
   jsxFragment: void | string;
@@ -49,7 +49,8 @@ export default async function publish(props: Props): Promise<void> {
   const accountId = config.account_id;
 
   const triggers = props.triggers || config.triggers?.crons;
-  const routes = props.routes || config.routes;
+  const routes =
+    props.routes || config.routes || (config.route && [config.route]);
 
   const jsxFactory = props.jsxFactory || config.jsxFactory;
   const jsxFragment = props.jsxFragment || config.jsxFragment;
