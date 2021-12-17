@@ -203,40 +203,41 @@ export default async function publish(props: Props): Promise<void> {
   console.log("Uploaded", workerName, formatTime(uploadMs));
   const deployments: Promise<string[]>[] = [];
 
-  const userSubdomain = (
-    await cfetch<{ subdomain: string }>(
-      `/accounts/${accountId}/workers/subdomain`
-    )
-  ).subdomain;
+  if (config.workers_dev) {
+    const userSubdomain = (
+      await cfetch<{ subdomain: string }>(
+        `/accounts/${accountId}/workers/subdomain`
+      )
+    ).subdomain;
 
-  const scriptURL =
-    props.legacyEnv || !props.env
-      ? `${scriptName}.${userSubdomain}.workers.dev`
-      : `${envName}.${scriptName}.${userSubdomain}.workers.dev`;
+    const scriptURL = notProd
+      ? `${envName}.${scriptName}.${userSubdomain}.workers.dev`
+      : `${scriptName}.${userSubdomain}.workers.dev`;
 
-  // Enable the `workers.dev` subdomain.
-  // TODO: Make this configurable.
-  if (!available_on_subdomain) {
-    deployments.push(
-      cfetch(`${workerUrl}/subdomain`, {
-        method: "POST",
-        body: JSON.stringify({ enabled: true }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-        .then(() => [scriptURL])
-        // Add a delay when the subdomain is first created.
-        // This is to prevent an issue where a negative cache-hit
-        // causes the subdomain to be unavailable for 30 seconds.
-        // This is a temporary measure until we fix this on the edge.
-        .then((url) => {
-          sleep(3000);
-          return url;
+    // Enable the `workers.dev` subdomain.
+    // TODO: Make this configurable.
+    if (!available_on_subdomain) {
+      deployments.push(
+        cfetch(`${workerUrl}/subdomain`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: true }),
+          headers: {
+            "Content-Type": "application/json",
+          },
         })
-    );
-  } else {
-    deployments.push(Promise.resolve([scriptURL]));
+          .then(() => [scriptURL])
+          // Add a delay when the subdomain is first created.
+          // This is to prevent an issue where a negative cache-hit
+          // causes the subdomain to be unavailable for 30 seconds.
+          // This is a temporary measure until we fix this on the edge.
+          .then((url) => {
+            sleep(3000);
+            return url;
+          })
+      );
+    } else {
+      deployments.push(Promise.resolve([scriptURL]));
+    }
   }
 
   // Update routing table for the script.
